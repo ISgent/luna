@@ -1,0 +1,7 @@
+# Храним текст в LF, при checkout на Windows — как решит git (text=auto).
+* text=auto
+
+# Двоичные файлы не нормализуем
+*.wav binary
+*.png binary
+*.db binary

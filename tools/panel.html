@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luna — панель управления</title>
+<style>
+  :root {
+    --bg: #12101c;
+    --card: #1c1930;
+    --card2: #232040;
+    --text: #e8e4f5;
+    --muted: #9a93b8;
+    --accent: #b58cff;
+    --green: #5ddc8a;
+    --yellow: #ffd166;
+    --red: #ff6b81;
+    --border: #2e2a4a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 48px;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 18px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 12px; }
+  .status-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .pill {
+    padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 14px;
+    border: 1px solid transparent;
+  }
+  .pill.online { background: rgba(93,220,138,.15); color: var(--green); border-color: rgba(93,220,138,.4); }
+  .pill.starting { background: rgba(255,209,102,.13); color: var(--yellow); border-color: rgba(255,209,102,.4); }
+  .pill.stopped { background: rgba(154,147,184,.12); color: var(--muted); border-color: rgba(154,147,184,.35); }
+  .pill.crash { background: rgba(255,107,129,.13); color: var(--red); border-color: rgba(255,107,129,.4); }
+  .meta { color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  button {
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    padding: 9px 18px; border-radius: 10px; font-size: 14px; cursor: pointer;
+    transition: .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .38; cursor: not-allowed; }
+  button.primary { background: rgba(181,140,255,.16); border-color: rgba(181,140,255,.5); color: var(--accent); font-weight: 600; }
+  button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  label.chk { display: flex; align-items: center; gap: 9px; padding: 7px 0; cursor: pointer; font-size: 14px; }
+  label.chk input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+  .hint { color: var(--muted); font-size: 12px; margin: 2px 0 0 26px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  pre#log {
+    background: #0c0a14; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; font-size: 12px; line-height: 1.5; height: 320px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-word; margin: 0;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .log-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--card2); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 20px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .toast.show { opacity: 1; }
+  .paths { color: var(--muted); font-size: 12px; line-height: 1.8; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌙 Luna</h1>
+  <div class="sub">панель управления Discord-ботом · только этот компьютер (127.0.0.1)</div>
+
+  <div class="card">
+    <h2>Состояние</h2>
+    <div class="status-row">
+      <span id="pill" class="pill stopped">—</span>
+      <span class="meta" id="meta">загрузка…</span>
+    </div>
+    <div class="btns">
+      <button id="btnStart" class="primary">▶ Запустить</button>
+      <button id="btnStop" class="danger">⏹ Остановить</button>
+      <button id="btnRestart">🔄 Перезапустить</button>
+      <button id="btnBuild" title="npm run build">🔨 Собрать</button>
+      <button id="btnShutdown" class="danger" title="Остановить бота и закрыть смотрителя">✖ Закрыть всё</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Автозапуск и надёжность</h2>
+    <label class="chk"><input type="checkbox" id="chkAutostart"> Запускать смотрителя при входе в Windows</label>
+    <div class="hint">ярлык в папке Startup — без админских прав; бот стартует после входа в систему</div>
+    <label class="chk"><input type="checkbox" id="chkAutostartBot"> Сразу запускать бота вместе со смотрителем</label>
+    <label class="chk"><input type="checkbox" id="chkAutoRestart"> Автоматически воскрешать бота при падении</label>
+  </div>
+
+  <div class="card">
+    <h2>Настройки (без правки .env руками)</h2>
+    <div class="grid">
+      <div class="field">
+        <label for="cfgVoice">Голос TTS (TTS_VOICE)</label>
+        <input id="cfgVoice" placeholder="Cherry">
+      </div>
+      <div class="field">
+        <label for="cfgLog">Уровень логов (LOG_LEVEL)</label>
+        <select id="cfgLog">
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="cfgModel">Основная модель (LLM_MODEL)</label>
+        <input id="cfgModel" placeholder="qwen-flash">
+      </div>
+      <div class="field">
+        <label for="cfgBg">Фоновая модель (LLM_BACKGROUND_MODEL)</label>
+        <input id="cfgBg" placeholder="qwen-plus">
+      </div>
+    </div>
+    <div class="btns">
+      <button id="btnSave" class="primary">💾 Сохранить и применить</button>
+      <span class="meta" style="align-self:center">применение перезапустит бота, если он запущен</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="log-head">
+      <h2 style="margin:0">Лог</h2>
+      <label class="chk" style="padding:0"><input type="checkbox" id="chkAutoRefresh" checked> обновлять</label>
+    </div>
+    <pre id="log">…</pre>
+    <div class="paths" id="paths"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+let status = null;
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+const post = (path, body) => api(path, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body ?? {}) });
+
+function fmtUptime(sec) {
+  if (!sec) return '—';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return (h ? h + 'ч ' : '') + (m ? m + 'м ' : '') + s + 'с';
+}
+
+function render() {
+  if (!status) return;
+  const b = status.bot;
+  const pill = $('pill');
+  pill.className = 'pill ';
+  if (b.state === 'crash-loop') { pill.className += 'crash'; pill.textContent = '🔴 краш-цикл'; }
+  else if (b.state === 'running' && b.online) { pill.className += 'online'; pill.textContent = '🟢 в сети (Discord подключён)'; }
+  else if (b.state === 'running') { pill.className += 'starting'; pill.textContent = '🟡 запускается…'; }
+  else { pill.className += 'stopped'; pill.textContent = '⚪ остановлен'; }
+
+  $('meta').innerHTML =
+    'аптайм: ' + fmtUptime(b.uptimeSec) +
+    ' · pid: ' + (b.pid ?? '—') +
+    ' · авто-перезапусков: ' + b.restarts +
+    (status.distReady ? '' : ' · <b style="color:var(--yellow)">сборки нет — нажмите «Собрать»</b>');
+
+  $('btnStart').disabled = b.state === 'running';
+  $('btnStop').disabled = b.state !== 'running';
+  $('btnRestart').disabled = b.state !== 'running';
+
+  $('chkAutostart').checked = status.autostart.enabled;
+  $('chkAutostartBot').checked = status.autostart.autostartBot;
+  $('chkAutoRestart').checked = status.autostart.autoRestart;
+  $('paths').textContent = 'лог: ' + status.logFile + ' · конфиг: ' + status.envFile;
+}
+
+async function refreshStatus() {
+  try { status = await api('/api/status'); render(); }
+  catch { $('pill').textContent = 'нет связи со смотрителем'; }
+}
+
+async function refreshLog() {
+  if (!$('chkAutoRefresh').checked && $('log').textContent !== '…') return;
+  try {
+    const { lines } = await api('/api/logs?tail=300');
+    const el = $('log');
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+    el.textContent = lines.join('\n') || '(пусто)';
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  } catch { /* смотритель перезапускается — молча попробуем снова */ }
+}
+
+async function loadConfig() {
+  try {
+    const c = await api('/api/config');
+    $('cfgVoice').value = c.TTS_VOICE || '';
+    $('cfgModel').value = c.LLM_MODEL || '';
+    $('cfgBg').value = c.LLM_BACKGROUND_MODEL || '';
+    $('cfgLog').value = c.LOG_LEVEL || 'info';
+  } catch { /* не критично */ }
+}
+
+$('btnStart').onclick = async () => {
+  try { const r = await post('/api/start'); if (r.error) throw new Error(r.error); toast('запускаю…'); refreshStatus(); }
+  catch (e) { toast('не вышло: ' + e.message); }
+};
+$('btnStop').onclick = async () => { await post('/api/stop'); toast('остановлен'); refreshStatus(); };
+$('btnRestart').onclick = async () => { await post('/api/restart'); toast('перезапускаю…'); refreshStatus(); };
+$('btnBuild').onclick = async () => {
+  $('btnBuild').disabled = true; toast('собираю (npm run build)…');
+  try {
+    const r = await post('/api/build');
+    toast(r.ok ? 'сборка готова ✓' : 'сборка упала — смотрите лог');
+  } catch (e) { toast('ошибка сборки: ' + e.message); }
+  $('btnBuild').disabled = false; refreshStatus();
+};
+$('btnShutdown').onclick = async () => {
+  if (!confirm('Остановить бота и закрыть смотрителя? Автозапуск при этом останется как был.')) return;
+  await post('/api/shutdown').catch(() => {});
+  $('pill').textContent = '⚪ смотритель закрыт';
+  toast('всё закрыто');
+};
+
+for (const [id, key] of [['chkAutostart','enabled'], ['chkAutostartBot','autostartBot'], ['chkAutoRestart','autoRestart']]) {
+  $(id).onchange = async () => {
+    try { await post('/api/autostart', { [key]: $(id).checked }); toast('сохранено'); }
+    catch (e) { toast('ошибка: ' + e.message); }
+    refreshStatus();
+  };
+}
+
+$('btnSave').onclick = async () => {
+  const values = {
+    TTS_VOICE: $('cfgVoice').value.trim(),
+    LLM_MODEL: $('cfgModel').value.trim(),
+    LLM_BACKGROUND_MODEL: $('cfgBg').value.trim(),
+    LOG_LEVEL: $('cfgLog').value,
+  };
+  try {
+    await post('/api/config', { values, apply: true });
+    toast('сохранено, бот перезапущен');
+    refreshStatus();
+  } catch (e) { toast('ошибка: ' + e.message); }
+};
+
+refreshStatus(); loadConfig(); refreshLog();
+setInterval(refreshStatus, 3000);
+setInterval(refreshLog, 2000);
+</script>
+</body>
+</html>

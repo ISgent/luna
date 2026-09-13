@@ -53,7 +53,7 @@ describe('loadConfig', () => {
   it('пустые строки = не задано (дефолт)', () => {
     const cfg = loadConfig({ env: { ...minimalEnv, OWNER_ID: '', LLM_TEMPERATURE: '' } });
     expect(cfg.discord.ownerId).toBeUndefined();
-    expect(cfg.llm.temperature).toBe(0.9);
+    expect(cfg.llm.temperature).toBe(0.8);
   });
 });
 

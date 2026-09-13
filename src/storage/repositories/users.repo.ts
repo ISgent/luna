@@ -53,6 +53,12 @@ export class UsersRepo {
     this.db.raw.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(Date.now(), id);
   }
 
+  /** Удалить пользователя (отношения уходят каскадом по FK). Записи памяти — отдельно. */
+  remove(id: string): boolean {
+    const res = this.db.raw.prepare('DELETE FROM users WHERE id = ?').run(id);
+    return Number(res.changes) > 0;
+  }
+
   all(): UserRecord[] {
     return (this.db.raw.prepare('SELECT * FROM users ORDER BY last_seen_at DESC').all() as unknown as UserRow[]).map(map);
   }

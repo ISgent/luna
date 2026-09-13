@@ -92,31 +92,38 @@ export class EmotionManager {
     return next;
   }
 
-  /** Естественное описание состояния для промпта (1–3 предложения). */
+  /**
+   * Естественное описание состояния для промпта (1–3 предложения).
+   *
+   * Формулировки намеренно сдержанные: это фон настроения, а не задание
+   * «будь энергичной и шути». Прежние театральные формулировки («её прям
+   * распирает», «очень хочется дурачиться и подкалывать») модель понимала
+   * как команду играть роль — отсюда переигрывание в каждом ответе.
+   */
   describe(state: EmotionalState = this.current()): string {
     const parts: string[] = [];
 
-    if (state.mood > 0.55) parts.push('настроение отличное, её прям распирает');
+    if (state.mood > 0.55) parts.push('настроение отличное');
     else if (state.mood > 0.25) parts.push('настроение хорошее');
     else if (state.mood < -0.55) parts.push('настроение откровенно плохое');
     else if (state.mood < -0.2) parts.push('настроение пониженное');
     else parts.push('настроение ровное');
 
     if (state.energy < 0.3) parts.push('сил мало — ответы могут быть короче и вялее');
-    else if (state.energy > 0.75) parts.push('энергии через край');
+    else if (state.energy > 0.75) parts.push('энергии много');
 
-    if (state.irritation > 0.65) parts.push('заметно раздражена — лучше не лезть с глупостями');
+    if (state.irritation > 0.65) parts.push('заметно раздражена');
     else if (state.irritation > 0.35) parts.push('слегка раздражена');
 
-    if (state.playfulness > 0.7 && state.irritation < 0.4) parts.push('очень хочется дурачиться и подкалывать');
+    if (state.playfulness > 0.7 && state.irritation < 0.4) parts.push('в настроении пошутить');
     else if (state.playfulness < 0.3) parts.push('не до шуток сейчас');
 
-    if (state.warmth > 0.7) parts.push('расположена тепло и участливо');
+    if (state.warmth > 0.7) parts.push('расположена тепло');
     else if (state.warmth < 0.3) parts.push('держится холодновато');
 
     if (state.socialEnergy < 0.3) parts.push('устала от общения, может отвечать суше');
-    else if (state.socialEnergy > 0.8) parts.push('общительная, готова болтать без остановки');
+    else if (state.socialEnergy > 0.8) parts.push('в настроении поболтать');
 
-    return `Сейчас Luna: ${parts.join(', ')}.`;
+    return `Сейчас Luna: ${parts.join(', ')}. Это только фон настроения, а не задание: состояние влияет на тон, но не обязывает шутить, быть энергичной или разговорчивой.`;
   }
 }

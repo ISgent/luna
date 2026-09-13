@@ -16,10 +16,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "tsx scripts/smoke.ts",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "personality:diag": "tsx scripts/personality-diag.ts",
+    "voice:diag": "tsx scripts/voice-diag.ts"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.18.0",
+    "@discordjs/voice": "^0.19.2",
     "discord.js": "^14.16.0",
     "dotenv": "^16.4.0",
     "libsodium-wrappers": "^0.7.15",

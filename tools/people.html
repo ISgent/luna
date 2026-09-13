@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luna — люди и память</title>
+<style>
+  :root {
+    --bg: #12101c;
+    --card: #1c1930;
+    --card2: #232040;
+    --text: #e8e4f5;
+    --muted: #9a93b8;
+    --accent: #b58cff;
+    --green: #5ddc8a;
+    --yellow: #ffd166;
+    --red: #ff6b81;
+    --border: #2e2a4a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 16px 48px;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0; display: flex; align-items: center; gap: 10px; }
+  h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 12px; }
+  .sub { color: var(--muted); font-size: 12.5px; }
+  .topbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .topbar .spacer { flex: 1; }
+  .back {
+    color: var(--muted); text-decoration: none; font-size: 13px; padding: 7px 12px;
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  .back:hover { color: var(--accent); border-color: var(--accent); }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 18px;
+  }
+  .banner {
+    background: rgba(255,209,102,.1); border: 1px solid rgba(255,209,102,.45); color: var(--yellow);
+    border-radius: 12px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 12px; line-height: 1.5;
+  }
+  .layout { display: grid; grid-template-columns: 290px 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  button {
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 15px; border-radius: 10px; font-size: 13.5px; cursor: pointer; transition: .15s;
+    font-family: inherit;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .38; cursor: not-allowed; }
+  button.primary { background: rgba(181,140,255,.16); border-color: rgba(181,140,255,.5); color: var(--accent); font-weight: 600; }
+  button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  button.danger.solid { background: rgba(255,107,129,.16); border-color: rgba(255,107,129,.55); color: var(--red); font-weight: 600; }
+  button.mini { padding: 3px 9px; font-size: 12.5px; border-radius: 8px; }
+  .btns { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+
+  [hidden] { display: none !important; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 13.5px; font-family: inherit;
+  }
+  textarea { resize: vertical; line-height: 1.45; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  input[type=range] { padding: 0; accent-color: var(--accent); background: transparent; border: 0; }
+  input.num { width: 66px; text-align: right; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; margin: 5px 0 0; }
+  .dim { opacity: .7; font-weight: 400; }
+  .field { margin-bottom: 11px; }
+
+  /* ---- список людей ---- */
+  .search { margin-bottom: 10px; }
+  .plist { display: flex; flex-direction: column; gap: 6px; max-height: 74vh; overflow-y: auto; }
+  .prow {
+    display: block; width: 100%; text-align: left; background: var(--card2); border: 1px solid var(--border);
+    border-radius: 11px; padding: 9px 11px; cursor: pointer; color: var(--text); transition: .15s;
+  }
+  .prow:hover { border-color: var(--accent); }
+  .prow.sel { border-color: var(--accent); background: rgba(181,140,255,.14); }
+  .pname { display: block; font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .psub { display: block; color: var(--muted); font-size: 11.5px; margin-bottom: 5px; }
+  .badge {
+    display: inline-block; font-size: 10.5px; font-weight: 600; color: var(--yellow);
+    border: 1px solid rgba(255,209,102,.45); background: rgba(255,209,102,.1);
+    border-radius: 999px; padding: 1px 7px; vertical-align: 1px; margin-left: 5px;
+  }
+  .bars { display: flex; gap: 3px; align-items: flex-end; height: 13px; }
+  .bars i { width: 6px; min-height: 1px; background: var(--accent); opacity: .7; border-radius: 2px; }
+
+  /* ---- карточка человека ---- */
+  .empty { color: var(--muted); font-size: 13.5px; line-height: 1.6; padding: 20px 4px; text-align: center; }
+  .sec { border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px; }
+  .sec:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  .idline { color: var(--muted); font-size: 12px; word-break: break-all; margin: 2px 0 10px; }
+  .idline code { color: var(--text); background: var(--bg); padding: 1px 6px; border-radius: 6px; }
+  .facts { color: var(--muted); font-size: 12.5px; line-height: 1.8; }
+  label.chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text); margin: 0 16px 0 0; cursor: pointer; }
+  label.chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  .desc {
+    background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 10px 13px; font-size: 13.5px; line-height: 1.55; margin-bottom: 13px;
+  }
+  .rel-row { display: grid; grid-template-columns: 128px 1fr 66px; gap: 11px; align-items: center; margin-bottom: 7px; }
+  .rel-row > label { margin: 0; font-size: 13px; color: var(--text); }
+  @media (max-width: 520px) { .rel-row { grid-template-columns: 100px 1fr 60px; } }
+  .counters { display: flex; gap: 18px; flex-wrap: wrap; margin: 13px 0 11px; }
+  .counters .c { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .counters .c input { width: 84px; }
+
+  .savebar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: rgba(181,140,255,.12); border: 1px solid rgba(181,140,255,.45);
+    border-radius: 11px; padding: 9px 13px; margin-bottom: 14px; font-size: 13px;
+  }
+
+  /* ---- записи памяти ---- */
+  .mem { border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; margin-bottom: 8px; background: var(--card2); }
+  .mem-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .mem-head .spacer { flex: 1; }
+  .kind {
+    font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(181,140,255,.13);
+    border: 1px solid rgba(181,140,255,.4); border-radius: 999px; padding: 1px 9px;
+  }
+  .mem-meta { color: var(--muted); font-size: 11.5px; }
+  .mem-content { font-size: 13.5px; line-height: 1.5; margin-bottom: 5px; white-space: pre-wrap; word-break: break-word; }
+  .mem-sub { color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+  .mem-form { border: 1px solid rgba(181,140,255,.5); border-radius: 11px; padding: 13px; margin-bottom: 10px; background: rgba(181,140,255,.06); }
+  .mrow { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 640px) { .mrow { grid-template-columns: 1fr; } }
+  .slider { display: grid; grid-template-columns: 1fr 60px; gap: 9px; align-items: center; }
+
+  .confirm {
+    margin-top: 10px; padding: 12px 14px; border-radius: 11px;
+    border: 1px solid rgba(255,107,129,.55); background: rgba(255,107,129,.08);
+  }
+  .confirm .q { font-size: 13.5px; font-weight: 600; color: var(--red); margin-bottom: 5px; }
+  .confirm .d { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
+  .zone { border-top: 1px solid rgba(255,107,129,.35); }
+
+  .modal { position: fixed; inset: 0; background: rgba(8,6,14,.72); display: flex; align-items: flex-start; justify-content: center; padding: 60px 16px; z-index: 10; }
+  .modal-card { width: 100%; max-width: 460px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--card2); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 20px; border-radius: 10px; font-size: 13.5px; opacity: 0; pointer-events: none;
+    transition: opacity .25s; z-index: 20; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="back" href="/">← Панель</a>
+    <h1>👥 Люди и память Luna</h1>
+    <span class="sub" id="botState">…</span>
+    <span class="spacer"></span>
+    <button id="btnRefresh" title="Перечитать из базы">⟳ Обновить</button>
+    <button id="btnAddPerson" class="primary">＋ Добавить человека</button>
+  </div>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="layout">
+    <aside class="card">
+      <h2>Кого Luna знает</h2>
+      <input id="search" class="search" placeholder="Поиск: имя или ID">
+      <div id="peopleList" class="plist"><div class="empty">загрузка…</div></div>
+    </aside>
+
+    <main class="card">
+      <div id="detailEmpty" class="empty">
+        Выберите человека слева — здесь будут его отношения с Luna и всё, что она о нём помнит.<br>
+        Правки сохраняются в ту же базу и подхватываются ботом сразу, перезапуск не нужен.
+      </div>
+      <div id="detailBody" hidden></div>
+    </main>
+  </div>
+</div>
+
+<div id="addModal" class="modal" hidden>
+  <div class="card modal-card">
+    <h2>Новый человек</h2>
+    <div class="field">
+      <label for="npName">Как зовут *</label>
+      <input id="npName" placeholder="например Gent">
+    </div>
+    <div class="field">
+      <label for="npNick">Username (необязательно)</label>
+      <input id="npNick" placeholder="например gentisded">
+    </div>
+    <div class="field">
+      <label for="npId">Discord ID (если это реальный пользователь)</label>
+      <input id="npId" placeholder="например 1442911842119979302">
+      <div class="hint">Без ID человек получит внутренний идентификатор: записи не свяжутся с его
+        сообщениями в Discord, а при первом же его сообщении Luna заведёт его заново.</div>
+    </div>
+    <div class="field">
+      <label for="npPreset">Начать отношения с</label>
+      <select id="npPreset"></select>
+    </div>
+    <div class="btns">
+      <button id="npSave" class="primary">Добавить</button>
+      <button id="npCancel">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+
+/** Типы записей — те же, что знает Luna (kind в memories). */
+const KINDS = [
+  ['fact', 'факт'], ['preference', 'предпочтение'], ['event', 'событие'], ['joke', 'шутка'],
+  ['promise', 'обещание'], ['open_thread', 'незакрытая тема'], ['impression', 'впечатление'],
+  ['consolidated', 'обобщение'],
+];
+const KIND_LABEL = Object.fromEntries(KINDS);
+/** Измерения отношений — порядок и подписи как в промпте Luna. */
+const REL_DIMS = [
+  ['familiarity', 'Знакомство', 'насколько хорошо Luna его знает'],
+  ['trust', 'Доверие', 'насколько она ему верит'],
+  ['closeness', 'Близость', 'насколько они близки'],
+  ['respect', 'Уважение', 'насколько она его уважает'],
+  ['affection', 'Симпатия', 'насколько он ей нравится'],
+];
+/** Пресеты отношений: заполняют ползунки (сохранять всё равно нужно кнопкой). */
+const REL_PRESETS = [
+  ['first', 'Первый контакт', { familiarity: .05, trust: .3, closeness: .05, respect: .3, affection: .1 }],
+  ['buddy', 'Приятель', { familiarity: .45, trust: .55, closeness: .4, respect: .5, affection: .45 }],
+  ['close', 'Близкий друг', { familiarity: .8, trust: .85, closeness: .75, respect: .75, affection: .75 }],
+  ['owner', 'Старый знакомый', { familiarity: .8, trust: .72, closeness: .65, respect: .6, affection: .6 }],
+  ['cold', 'Неприятный тип', { familiarity: .4, trust: .12, closeness: .1, respect: .2, affection: .1 }],
+];
+/** Псевдо-человек для записей, которые не привязаны к кому-то одному (о мире и о самой Luna). */
+const GLOBAL = '__global__';
+
+let people = [];
+let globalCount = 0;
+let selected;          // personId | null (общие записи) | undefined (ничего не выбрано)
+let detail = null;     // {person, memories}
+let draft = null;      // черновик правок карточки человека
+let draftFor = null;   // чей это черновик — чтобы перерисовка не съедала несохранённое
+let orig = null;       // сохранённое состояние: с ним сравниваем при поиске изменений
+let editing = null;    // id записи, которая открыта в форме ('new' = новая)
+let confirming = null; // 'wipe' | 'delete' | 'mem:<id>' — какой блок подтверждения открыт
+
+// ---------- утилиты ----------
+
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), isErr ? 4200 : 2600);
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+const pct = (v) => Math.round((Number(v) || 0) * 100);
+const round2 = (v) => Math.round(v * 100) / 100;
+
+function fmtDate(ms) {
+  if (!ms) return '—';
+  return new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtDay(ms) {
+  return ms ? new Date(ms).toLocaleDateString('ru-RU') : '—';
+}
+
+async function api(action, payload) {
+  const r = await fetch('/api/people', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, payload: payload ?? {} }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+
+/** Обёртка действия: блокировка кнопок не нужна, но ошибка должна быть видна. */
+async function run(fn, okMsg) {
+  try {
+    const r = await fn();
+    if (okMsg) toast(okMsg);
+    return r;
+  } catch (e) {
+    toast(e.message, true);
+    return null;
+  }
+}
+
+function personTitle(p) {
+  return p.displayName || p.username || '(без имени)';
+}
+
+// ---------- список слева ----------
+
+async function loadList() {
+  const r = await api('list');
+  people = r.people ?? [];
+  globalCount = r.globalMemories ?? 0;
+  renderList();
+}
+
+function bars(rel) {
+  if (!rel) return '';
+  return '<span class="bars">' + REL_DIMS
+    .map(([k, label]) => `<i style="height:${Math.max(6, pct(rel[k]))}%" title="${label}: ${pct(rel[k])}%"></i>`)
+    .join('') + '</span>';
+}
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const rows = people.filter((p) =>
+    !q || `${p.displayName} ${p.username} ${p.personId}`.toLowerCase().includes(q));
+
+  const selKey = selected === null ? GLOBAL : selected;
+  const html = rows.map((p) => `
+    <button class="prow${selKey === p.personId ? ' sel' : ''}" data-pid="${esc(p.personId)}">
+      <span class="pname">${esc(personTitle(p))}${p.isOwner ? '<span class="badge">владелец</span>' : ''}</span>
+      <span class="psub">записей: ${p.memoryCount}${p.relationship ? ` · доверие ${pct(p.relationship.trust)}% · симпатия ${pct(p.relationship.affection)}%` : ' · отношений пока нет'}</span>
+      ${bars(p.relationship)}
+    </button>`).join('');
+
+  const globalRow = `
+    <button class="prow${selKey === GLOBAL ? ' sel' : ''}" data-pid="${GLOBAL}">
+      <span class="pname">🌍 Общие записи</span>
+      <span class="psub">не о конкретном человеке: ${globalCount} (мир и сама Luna)</span>
+    </button>`;
+
+  $('peopleList').innerHTML = (html || (q ? '<div class="empty">ничего не найдено</div>' : '<div class="empty">Luna пока никого не знает</div>')) + globalRow;
+}
+
+$('search').oninput = renderList;
+
+$('peopleList').onclick = (e) => {
+  const row = e.target.closest('[data-pid]');
+  if (row) openPerson(row.dataset.pid);
+};
+
+// ---------- карточка справа ----------
+
+async function openPerson(pid) {
+  selected = pid === GLOBAL ? null : pid;
+  editing = null;
+  confirming = null;
+  const r = await run(() => api('get', { personId: selected }));
+  if (!r) return;
+  detail = r;
+  renderList();
+  renderDetail();
+}
+
+function memoryFormHtml(m) {
+  const v = m ?? { content: '', kind: 'fact', importance: 0.5, confidence: 0.95, emotion: '', emotionIntensity: 0, opinion: '', objectiveFacts: [] };
+  const id = m ? m.id : 'new';
+  return `
+  <div class="mem-form" data-form="${id}">
+    <div class="field">
+      <label for="mContent">Что Luna помнит * <span style="opacity:.7">(одна естественная фраза, от третьего лица)</span></label>
+      <textarea id="mContent" rows="2" placeholder="например Gent любит Сталкер и часто зовёт в голос">${esc(v.content)}</textarea>
+    </div>
+    <div class="mrow">
+      <div class="field">
+        <label for="mKind">Тип записи</label>
+        <select id="mKind">${KINDS.map(([k, l]) => `<option value="${k}"${v.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      </div>
+      <div class="field">
+        <label for="mEmotion">Эмоция события</label>
+        <input id="mEmotion" placeholder="например радость, грусть" value="${esc(v.emotion ?? '')}">
+      </div>
+    </div>
+    <div class="mrow">
+      <div class="field">
+        <label for="mImportance">Важность: <b id="mImportanceV">${pct(v.importance)}%</b> <span class="dim">0.1–0.3 бытовое, 0.4–0.6 заметное, 0.7+ значимое</span></label>
+        <div class="slider"><input type="range" id="mImportance" min="0" max="100" value="${pct(v.importance)}"><input type="number" class="num" id="mImportanceN" min="0" max="100" value="${pct(v.importance)}"></div>
+      </div>
+      <div class="field">
+        <label for="mEmotionI">Сила эмоции: <b id="mEmotionIV">${pct(v.emotionIntensity)}%</b></label>
+        <div class="slider"><input type="range" id="mEmotionI" min="0" max="100" value="${pct(v.emotionIntensity)}"><input type="number" class="num" id="mEmotionIN" min="0" max="100" value="${pct(v.emotionIntensity)}"></div>
+      </div>
+    </div>
+    <div class="mrow">
+      <div class="field">
+        <label for="mConfidence">Уверенность: <b id="mConfidenceV">${pct(v.confidence)}%</b> <span class="dim">насколько это точно известно</span></label>
+        <div class="slider"><input type="range" id="mConfidence" min="0" max="100" value="${pct(v.confidence)}"><input type="number" class="num" id="mConfidenceN" min="0" max="100" value="${pct(v.confidence)}"></div>
+      </div>
+      <div class="field">
+        <label for="mFacts">Объективные факты <span style="opacity:.7">(по одному в строке)</span></label>
+        <textarea id="mFacts" rows="2" placeholder="говорит, что прошёл Сталкер три раза">${esc((v.objectiveFacts ?? []).join('\n'))}</textarea>
+      </div>
+    </div>
+    <div class="field">
+      <label for="mOpinion">Впечатление Luna <span style="opacity:.7">(попадёт в промпт как «твоё впечатление»)</span></label>
+      <textarea id="mOpinion" rows="2" placeholder="например с ним спокойно, он не выпендривается">${esc(v.opinion ?? '')}</textarea>
+    </div>
+    <div class="btns">
+      <button class="primary mini" data-act="save-mem" data-id="${id}">💾 Сохранить запись</button>
+      <button class="mini" data-act="cancel-mem">Отмена</button>
+    </div>
+  </div>`;
+}
+
+function memoryRowHtml(m) {
+  const sub = [];
+  if (m.opinion) sub.push(`впечатление: ${esc(m.opinion)}`);
+  if (m.emotion) sub.push(`эмоция: ${esc(m.emotion)} ${Math.round((m.emotionIntensity || 0) * 10) / 10}`);
+  if (m.objectiveFacts?.length) sub.push(`фактов: ${m.objectiveFacts.length}`);
+  sub.push(`уверенность ${pct(m.confidence)}%`);
+  if (m.recallCount) sub.push(`вспомнила ${m.recallCount}×`);
+  if (!m.hasEmbedding) sub.push('без вектора (ищется по словам)');
+  return `
+  <div class="mem" data-mem="${esc(m.id)}">
+    <div class="mem-head">
+      <span class="kind">${KIND_LABEL[m.kind] ?? esc(m.kind)}</span>
+      <span class="mem-meta">${fmtDay(m.createdAt)} · важность ${pct(m.importance)}%</span>
+      <span class="spacer"></span>
+      <button class="mini" data-act="edit-mem" data-id="${esc(m.id)}">✎ править</button>
+      <button class="mini danger" data-act="ask-del-mem" data-id="${esc(m.id)}">🗑</button>
+    </div>
+    <div class="mem-content">${esc(m.content)}</div>
+    <div class="mem-sub">${sub.join(' · ')}</div>
+    ${confirming === 'mem:' + m.id ? `
+      <div class="confirm">
+        <div class="q">Удалить эту запись?</div>
+        <div class="d">Luna перестанет её вспоминать. Отменить нельзя.</div>
+        <div class="btns">
+          <button class="mini danger solid" data-act="del-mem" data-id="${esc(m.id)}">Да, удалить</button>
+          <button class="mini" data-act="cancel-confirm">Отмена</button>
+        </div>
+      </div>` : ''}
+  </div>`;
+}
+
+function relationshipHtml(p) {
+  const d = draft.rel;
+  return `
+  <div class="sec">
+    <h2>Отношения Luna</h2>
+    <div class="desc"><b>Так это видит Luna:</b> ${esc(p.description) || '—'}</div>
+    <div class="btns" style="margin-bottom:13px">
+      <span class="sub">заполнить пресетом:</span>
+      ${REL_PRESETS.map(([k, label]) => `<button class="mini" data-act="preset" data-id="${k}">${label}</button>`).join('')}
+    </div>
+    ${REL_DIMS.map(([k, label, tip]) => `
+      <div class="rel-row" title="${tip}">
+        <label for="rel_${k}">${label}</label>
+        <input type="range" id="rel_${k}" min="0" max="100" step="1" value="${pct(d[k])}">
+        <input type="number" class="num" id="reln_${k}" min="0" max="100" step="1" value="${pct(d[k])}">
+      </div>`).join('')}
+    <div class="hint">«Знакомство» Luna пересчитывает сама по числу взаимодействий и не опускает ниже формулы —
+      чтобы снизить его надолго, уменьшите и счётчик взаимодействий. Остальное бот меняет только плавно
+      (по итогам разговоров), поэтому ручная правка держится.</div>
+    <div class="counters">
+      <span class="c"><label for="relInteractions" style="margin:0">Взаимодействий</label><input type="number" class="num" id="relInteractions" min="0" step="1" value="${draft.interactions}"></span>
+      <span class="c"><label for="relSharedXp" style="margin:0">Совместных событий</label><input type="number" class="num" id="relSharedXp" min="0" step="1" value="${draft.sharedXp}"></span>
+    </div>
+    <div class="field">
+      <label for="relSummary">Описание отношений словами (попадёт в промпт как есть)</label>
+      <textarea id="relSummary" rows="3">${esc(draft.summary)}</textarea>
+    </div>
+  </div>`;
+}
+
+function personHtml(p) {
+  const s = p.settings ?? {};
+  const st = p.stats;
+  return `
+  <div class="sec">
+    <h2>Человек</h2>
+    <div id="saveBar" class="savebar" hidden>
+      <span>Есть несохранённые изменения</span>
+      <button class="primary mini" data-act="save-person">💾 Сохранить</button>
+      <button class="mini" data-act="reset-draft">Отменить</button>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="pName">Как зовут (имя, которое Luna видит в сообщениях)</label>
+        <input id="pName" value="${esc(draft.displayName)}">
+      </div>
+      <div class="field">
+        <label for="pNick">Username</label>
+        <input id="pNick" value="${esc(draft.username)}">
+      </div>
+    </div>
+    <div class="idline">ID: <code>${esc(p.personId)}</code> ${p.isOwner ? '<span class="badge">владелец</span>' : ''}</div>
+    <div class="facts">
+      впервые: ${fmtDate(p.firstSeenAt)} · последний раз: ${fmtDate(p.lastSeenAt)}<br>
+      ${st ? `сообщений от него: ${st.messagesIn}, ответов Luna: ${st.messagesOut}, голос: ${Math.round(st.voiceSeconds / 60)} мин, дней общения: ${st.days}<br>` : ''}
+      записей в памяти: ${p.memoryCount}
+    </div>
+    <div style="margin-top:11px">
+      <label class="chk"><input type="checkbox" id="setMemory" ${s.memoryEnabled !== false ? 'checked' : ''}> запоминать его и вспоминать записи</label>
+      <label class="chk"><input type="checkbox" id="setTts" ${s.ttsEnabled !== false ? 'checked' : ''}> озвучивать ответы ему</label>
+      <label class="chk"><input type="checkbox" id="setVoice" ${s.voiceEnabled !== false ? 'checked' : ''}> слушать его голос</label>
+      <div class="hint">это те же переключатели, что и команды /memory off, /luna tts off, /luna voice off</div>
+    </div>
+  </div>`;
+}
+
+function memoriesHtml() {
+  const list = detail.memories ?? [];
+  const title = selected === null ? 'Общие записи' : 'Память о нём';
+  return `
+  <div class="sec">
+    <h2>${title} · ${list.length}</h2>
+    <div class="btns" style="margin-bottom:11px">
+      <button class="primary mini" data-act="add-mem">＋ Добавить запись</button>
+      <span class="sub">порядок: новые сверху</span>
+    </div>
+    ${editing === 'new' ? memoryFormHtml(null) : ''}
+    ${list.length === 0 && editing !== 'new'
+      ? '<div class="empty">Записей пока нет — Luna ничего об этом не помнит.</div>'
+      : list.map((m) => (editing === m.id ? memoryFormHtml(m) : memoryRowHtml(m))).join('')}
+  </div>`;
+}
+
+function dangerHtml(p) {
+  return `
+  <div class="sec zone">
+    <h2>Опасная зона</h2>
+    <div class="btns">
+      <button class="danger" data-act="ask-wipe">🧠 Забыть всё о нём</button>
+      <button class="danger" data-act="ask-delete">🗑 Удалить человека</button>
+    </div>
+    ${confirming === 'wipe' ? `
+      <div class="confirm">
+        <div class="q">Забыть всё о ${esc(personTitle(p))}?</div>
+        <div class="d">Сотрётся ${p.memoryCount} записей памяти и отношения — знакомиться будут заново.
+          Сам человек останется в списке (Luna заведёт его снова при первом сообщении).</div>
+        <div class="btns">
+          <button class="danger solid mini" data-act="wipe">Да, забыть</button>
+          <button class="mini" data-act="cancel-confirm">Отмена</button>
+        </div>
+      </div>` : ''}
+    ${confirming === 'delete' ? `
+      <div class="confirm">
+        <div class="q">Удалить ${esc(personTitle(p))} из списка?</div>
+        <div class="d">Убирает человека из базы вместе с отношениями.${p.isOwner ? ' Это владелец: при следующем его сообщении Luna снова заведёт его как «старого знакомого».' : ''}</div>
+        <label class="chk"><input type="checkbox" id="delWithMemories" checked> удалить и его записи памяти (${p.memoryCount})</label>
+        <div class="btns" style="margin-top:9px">
+          <button class="danger solid mini" data-act="delete">Да, удалить</button>
+          <button class="mini" data-act="cancel-confirm">Отмена</button>
+        </div>
+      </div>` : ''}
+  </div>`;
+}
+
+function renderDetail() {
+  const body = $('detailBody');
+  $('detailEmpty').hidden = true;
+  body.hidden = false;
+
+  if (selected === null) {
+    // общие записи: человека нет, есть только память о мире и о самой Luna
+    body.innerHTML = `
+      <div class="sec">
+        <h2>🌍 Общие записи</h2>
+        <div class="desc">Это записи не о конкретном человеке: то, что Luna узнала о мире, о сервере
+          и о себе. Они попадают в промпт любому собеседнику — здесь их можно поправить или удалить.</div>
+      </div>` + memoriesHtml();
+  } else {
+    ensureDraft(detail.person);
+    const p = detail.person;
+    body.innerHTML = personHtml(p) + relationshipHtml(p) + memoriesHtml() + dangerHtml(p);
+  }
+
+  bindDetail();
+}
+
+/**
+ * Черновик создаётся один раз на человека: перерисовка (открыли форму записи, включили
+ * подтверждение) не должна съедать несохранённые правки отношений.
+ */
+function ensureDraft(p) {
+  if (draft && draftFor === p.personId) return;
+  draft = {
+    displayName: p.displayName,
+    username: p.username,
+    interactions: p.relationship?.interactions ?? 0,
+    sharedXp: p.relationship?.sharedXp ?? 0,
+    summary: p.relationship?.summary ?? '',
+    rel: Object.fromEntries(REL_DIMS.map(([k]) => [k, p.relationship?.[k] ?? (k === 'trust' || k === 'respect' ? .3 : .05)])),
+  };
+  orig = JSON.parse(JSON.stringify(draft));
+  draftFor = p.personId;
+}
+
+// ---------- привязка событий карточки ----------
+
+function bindDetail() {
+  // ползунки отношений: range ↔ число, оба пишут в черновик
+  for (const [k] of REL_DIMS) {
+    const range = $('rel_' + k), num = $('reln_' + k);
+    if (!range || !num) continue;
+    range.oninput = () => { draft.rel[k] = range.value / 100; num.value = range.value; markDirty(); };
+    num.oninput = () => {
+      const v = Math.max(0, Math.min(100, Number(num.value) || 0));
+      draft.rel[k] = v / 100; range.value = v; markDirty();
+    };
+  }
+  for (const [id, key, num] of [['pName', 'displayName', false], ['pNick', 'username', false],
+    ['relInteractions', 'interactions', true], ['relSharedXp', 'sharedXp', true], ['relSummary', 'summary', false]]) {
+    const el = $(id);
+    if (!el) continue;
+    el.oninput = () => { draft[key] = num ? Math.max(0, Math.round(Number(el.value) || 0)) : el.value; markDirty(); };
+  }
+
+  // личные переключатели сохраняются сразу
+  for (const [id, key] of [['setMemory', 'memory_enabled'], ['setTts', 'tts_enabled'], ['setVoice', 'voice_enabled']]) {
+    const el = $(id);
+    if (!el) continue;
+    el.onchange = async () => {
+      el.disabled = true;
+      await run(() => api('setSetting', { personId: selected, key, value: el.checked }), el.checked ? 'включено' : 'выключено');
+      el.disabled = false;
+    };
+  }
+
+  // ползунки в форме записи: range ↔ число ↔ подпись процента
+  for (const base of ['mImportance', 'mConfidence', 'mEmotionI']) {
+    const range = $(base), num = $(base + 'N'), view = $(base + 'V');
+    if (!range || !num) continue;
+    const sync = (from, to) => {
+      const v = Math.max(0, Math.min(100, Number(from.value) || 0));
+      to.value = v;
+      if (view) view.textContent = v + '%';
+    };
+    range.oninput = () => sync(range, num);
+    num.oninput = () => sync(num, range);
+  }
+
+  markDirty();
+}
+
+/** Показывает панель сохранения, если черновик отличается от сохранённого. */
+function markDirty() {
+  const bar = $('saveBar');
+  if (!bar || !draft || !orig) return;
+  bar.hidden = JSON.stringify(draft) === JSON.stringify(orig);
+}
+
+function draftPatch() {
+  const patch = {};
+  if (draft.displayName !== orig.displayName) patch.displayName = draft.displayName;
+  if (draft.username !== orig.username) patch.username = draft.username;
+  const rel = {};
+  for (const [k] of REL_DIMS) {
+    if (round2(draft.rel[k]) !== round2(orig.rel[k])) rel[k] = round2(draft.rel[k]);
+  }
+  if (draft.interactions !== orig.interactions) rel.interactions = draft.interactions;
+  if (draft.sharedXp !== orig.sharedXp) rel.sharedXp = draft.sharedXp;
+  if (draft.summary !== orig.summary) rel.summary = draft.summary;
+  if (Object.keys(rel).length) patch.relationship = rel;
+  return patch;
+}
+
+async function savePerson() {
+  const patch = draftPatch();
+  if (!Object.keys(patch).length) { toast('менять нечего'); return; }
+  const r = await run(() => api('updatePerson', { personId: selected, ...patch }));
+  if (!r) return;
+  detail = r;
+  editing = null;
+  draftFor = null; // черновик пересоберётся из свежих данных
+  await run(loadList);
+  renderDetail();
+  toast('сохранено — Luna учтёт это уже в следующем ответе');
+}
+
+function memoryFromForm() {
+  return {
+    content: $('mContent').value,
+    kind: $('mKind').value,
+    importance: (Number($('mImportance').value) || 0) / 100,
+    confidence: (Number($('mConfidence').value) || 0) / 100,
+    emotion: $('mEmotion').value.trim(),
+    emotionIntensity: (Number($('mEmotionI').value) || 0) / 100,
+    opinion: $('mOpinion').value.trim(),
+    objectiveFacts: $('mFacts').value.split('\n').map((s) => s.trim()).filter(Boolean),
+  };
+}
+
+async function saveMemory(id) {
+  const memory = memoryFromForm();
+  if (memory.content.trim().length < 3) { toast('текст записи: минимум 3 символа', true); return; }
+  const r = id === 'new'
+    ? await run(() => api('addMemory', { personId: selected, memory }))
+    : await run(() => api('updateMemory', { memoryId: id, memory }));
+  if (!r) return;
+  editing = null;
+  // список перечитываем из базы: дедупликация могла усилить существующую запись вместо новой
+  await run(async () => { detail = await api('get', { personId: selected }); });
+  await run(loadList);
+  renderDetail();
+  toast(r.stored === 'updated' ? 'похожая запись уже была — Luna усилила её вместо новой' : 'сохранено');
+}
+
+// ---------- клики в карточке (делегирование) ----------
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn || !$('detailBody').contains(btn)) return;
+  const act = btn.dataset.act;
+  const id = btn.dataset.id;
+
+  if (act === 'preset') {
+    const preset = REL_PRESETS.find(([k]) => k === id);
+    if (!preset) return;
+    Object.assign(draft.rel, preset[2]);
+    renderDetailKeepScroll(preset[1]);
+    return;
+  }
+  if (act === 'save-person') return savePerson();
+  if (act === 'reset-draft') { draftFor = null; renderDetail(); toast('изменения отменены'); return; }
+
+  if (act === 'add-mem') { editing = 'new'; renderDetailKeepScroll(); return; }
+  if (act === 'edit-mem') { editing = id; renderDetailKeepScroll(); return; }
+  if (act === 'cancel-mem') { editing = null; renderDetailKeepScroll(); return; }
+  if (act === 'save-mem') { btn.disabled = true; await saveMemory(id); return; }
+
+  if (act === 'ask-del-mem') { confirming = 'mem:' + id; renderDetailKeepScroll(); return; }
+  if (act === 'del-mem') {
+    const r = await run(() => api('deleteMemory', { memoryId: id }));
+    if (!r) return;
+    await run(async () => { detail = await api('get', { personId: selected }); });
+    await run(loadList);
+    confirming = null;
+    renderDetail();
+    toast('запись удалена');
+    return;
+  }
+
+  if (act === 'ask-wipe') { confirming = 'wipe'; renderDetailKeepScroll(); return; }
+  if (act === 'ask-delete') { confirming = 'delete'; renderDetailKeepScroll(); return; }
+  if (act === 'cancel-confirm') { confirming = null; renderDetailKeepScroll(); return; }
+
+  if (act === 'wipe') {
+    btn.disabled = true;
+    const r = await run(() => api('wipePerson', { personId: selected }), 'забыто');
+    if (!r) { btn.disabled = false; return; }
+    toast(`стёрто записей: ${r.deletedMemories ?? 0}, отношения сброшены — знакомитесь заново`);
+    await run(async () => { detail = await api('get', { personId: selected }); });
+    await run(loadList);
+    confirming = null;
+    draftFor = null; // отношений больше нет — черновик собираем заново
+    renderDetail();
+    return;
+  }
+  if (act === 'delete') {
+    btn.disabled = true;
+    const withMem = $('delWithMemories')?.checked !== false;
+    const r = await run(() => api('deletePerson', { personId: selected, deleteMemories: withMem }));
+    if (!r) { btn.disabled = false; return; }
+    toast(`человек удалён${withMem ? `, записей стёрто: ${r.deletedMemories ?? 0}` : ''}`);
+    selected = undefined;
+    detail = null;
+    draft = null;
+    draftFor = null;
+    confirming = null;
+    $('detailBody').hidden = true;
+    $('detailEmpty').hidden = false;
+    await run(loadList);
+  }
+});
+
+/** Перерисовка карточки без потери прокрутки: черновик и открытые подтверждения сохраняются. */
+function renderDetailKeepScroll(presetName) {
+  const y = window.scrollY;
+  renderDetail();
+  if (presetName) toast(`пресет «${presetName}» заполнил ползунки — не забудьте сохранить`);
+  window.scrollTo(0, y);
+}
+
+// ---------- добавление человека ----------
+
+$('npPreset').innerHTML = REL_PRESETS.map(([k, label]) => `<option value="${k}"${k === 'first' ? ' selected' : ''}>${label}</option>`).join('');
+
+$('btnAddPerson').onclick = () => {
+  $('npName').value = ''; $('npNick').value = ''; $('npId').value = '';
+  $('addModal').hidden = false;
+  $('npName').focus();
+};
+$('npCancel').onclick = () => { $('addModal').hidden = true; };
+$('addModal').onclick = (e) => { if (e.target === $('addModal')) $('addModal').hidden = true; };
+
+$('npSave').onclick = async () => {
+  const displayName = $('npName').value.trim();
+  const username = $('npNick').value.trim();
+  const personId = $('npId').value.trim();
+  if (!displayName && !username) { toast('укажите имя', true); return; }
+  const preset = REL_PRESETS.find(([k]) => k === $('npPreset').value);
+  $('npSave').disabled = true;
+  const r = await run(() => api('createPerson', {
+    personId: personId || undefined,
+    displayName: displayName || undefined,
+    username: username || undefined,
+    relationship: preset ? preset[2] : undefined,
+  }));
+  $('npSave').disabled = false;
+  if (!r) return;
+  $('addModal').hidden = true;
+  await run(loadList);
+  detail = r;
+  selected = r.person.personId;
+  renderList();
+  renderDetail();
+  toast('человек добавлен');
+};
+
+// ---------- статус бота и старт ----------
+
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    const b = s.bot ?? {};
+    $('botState').textContent = b.state === 'running'
+      ? (b.online ? '· бот в сети: правки подхватятся в следующем ответе' : '· бот запускается')
+      : '· бот остановлен: правки сохранятся и заработают после запуска';
+    const banner = $('banner');
+    if (s.peopleReady === false) {
+      banner.hidden = false;
+      banner.innerHTML = 'Нет сборки: страница не может читать базу. Откройте <a href="/" style="color:var(--yellow)">панель</a> и нажмите «🔨 Собрать».';
+    } else {
+      banner.hidden = true;
+    }
+  } catch {
+    $('botState').textContent = '· нет связи со смотрителем';
+  }
+}
+
+$('btnRefresh').onclick = async () => {
+  await run(loadStatus);
+  await run(loadList);
+  const dirty = !!(draft && orig && JSON.stringify(draft) !== JSON.stringify(orig));
+  if (!dirty) draftFor = null;
+  if (selected !== undefined) await openPerson(selected === null ? GLOBAL : selected);
+  toast(dirty ? 'обновлено (несохранённые правки остались)' : 'обновлено');
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (!$('addModal').hidden) { $('addModal').hidden = true; return; }
+    if (editing || confirming) { editing = null; confirming = null; renderDetailKeepScroll(); }
+  }
+});
+
+(async function init() {
+  await run(loadStatus);
+  await run(loadList);
+})();
+</script>
+</body>
+</html>

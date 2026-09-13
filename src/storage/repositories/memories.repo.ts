@@ -208,6 +208,14 @@ export class MemoriesRepo {
     ).map(mapRow);
   }
 
+  /** Люди, о которых есть хоть одна запись (включая скрытые/слитые). */
+  distinctPersonIds(): string[] {
+    const rows = this.db.raw
+      .prepare('SELECT DISTINCT person_id FROM memories WHERE person_id IS NOT NULL')
+      .all() as Array<{ person_id: string }>;
+    return rows.map((r) => r.person_id);
+  }
+
   /** Keyword-поиск: FTS5 если доступен, иначе LIKE. */
   keywordSearch(text: string, opts: KeywordSearchOptions = {}): MemoryRecord[] {
     const tokens = tokenizeForSearch(text);
@@ -277,10 +285,20 @@ export class MemoriesRepo {
     return Number(res.changes) > 0;
   }
 
-  countActive(personId?: string): number {
-    const row = personId
-      ? (this.db.raw.prepare("SELECT COUNT(*) as c FROM memories WHERE status='active' AND person_id = ?").get(personId) as { c: number })
-      : (this.db.raw.prepare("SELECT COUNT(*) as c FROM memories WHERE status='active'").get() as { c: number });
+  /** Полный сброс памяти: удаляет ВСЕ записи (FTS чистится триггером). Число удалённых. */
+  deleteAll(): number {
+    const res = this.db.raw.prepare('DELETE FROM memories').run();
+    return Number(res.changes);
+  }
+
+  /** Активные записи: все (без аргумента), одного человека (строка) или общие (null). */
+  countActive(personId?: string | null): number {
+    const row =
+      personId === null
+        ? (this.db.raw.prepare("SELECT COUNT(*) as c FROM memories WHERE status='active' AND person_id IS NULL").get() as { c: number })
+        : personId
+          ? (this.db.raw.prepare("SELECT COUNT(*) as c FROM memories WHERE status='active' AND person_id = ?").get(personId) as { c: number })
+          : (this.db.raw.prepare("SELECT COUNT(*) as c FROM memories WHERE status='active'").get() as { c: number });
     return row.c;
   }
 

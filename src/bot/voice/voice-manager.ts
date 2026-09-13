@@ -146,6 +146,14 @@ export class VoiceManager {
       this.states.set(guildId, state);
 
       const conn = connection;
+      // Debug-поток голосового соединения: сюда приходят код и причина закрытия WS.
+      // Без него любой обрыв выглядит как «бот молча вышел из канала» (так было с 4017
+      // «E2EE/DAVE protocol required», когда @discordjs/voice 0.18 ещё не умел DAVE).
+      conn.on('debug', (detail) => {
+        if (/close|closed|error|fail|4\d{3}|dave|encrypt/i.test(detail)) {
+          this.deps.logger.warn({ guildId, detail }, 'voice: debug');
+        }
+      });
       conn.on(VoiceConnectionStatus.Disconnected, async () => {
         try {
           // кратковременный разрыв → ждём восстановления, иначе чистим
@@ -161,7 +169,16 @@ export class VoiceManager {
       this.deps.logger.info({ guildId, voiceChannelId }, 'voice: joined');
       return true;
     } catch (e) {
-      this.deps.logger.error({ err: String(e), guildId }, 'voice: join failed');
+      this.deps.logger.error(
+        {
+          err: String(e),
+          guildId,
+          hint: /abort/i.test(String(e))
+            ? 'соединение не дошло до Ready: смотри строки «voice: debug» выше (код закрытия WS) и npm run voice:diag'
+            : undefined,
+        },
+        'voice: join failed',
+      );
       try {
         connection?.destroy();
       } catch {

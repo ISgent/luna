@@ -73,13 +73,20 @@ export interface EmotionalState {
   updatedAt: number;
 }
 
+/**
+ * Базовая линия настроения — «обычная Luna», к которой состояние стягивается
+ * со временем. Намеренно нейтральная: playfulness и socialEnergy ниже
+ * порогов, при которых описание состояния советует шутить и болтать.
+ * Раньше базовая линия была близка к этим порогам, и любой положительный
+ * сдвиг от фона превращал каждый ответ в выступление.
+ */
 export const EMOTION_BASELINE: Omit<EmotionalState, 'updatedAt'> = {
   mood: 0.2,
   energy: 0.6,
-  playfulness: 0.6,
+  playfulness: 0.45,
   irritation: 0,
   warmth: 0.5,
-  socialEnergy: 0.7,
+  socialEnergy: 0.6,
 };
 
 export interface UserRecord {

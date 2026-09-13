@@ -37,10 +37,16 @@ export const OWNER_SEED: Omit<RelationshipState, 'personId' | 'updatedAt'> = {
   closeness: 0.65,
   respect: 0.6,
   affection: 0.6,
-  sharedXp: 6,
+  // 0: значимые совместные события считаются только из реально записанной памяти.
+  // Сид «старого знакомого» делается через familiarity/trust/closeness, а не через
+  // выдуманный счётчик — иначе промпт заявлял о шести общих событиях, которых в памяти
+  // нет, и модель их сочиняла.
+  sharedXp: 0,
   interactions: 25,
+  // Никакой придуманной совместной истории: общие события берутся только
+  // из записей памяти, иначе модель начинает сочинять «а помнишь, как мы…».
   summary:
-    'Luna давно знает этого человека, они хорошие приятели. Она свободно шутит и подкалывает его, может спорить и говорить без лишней вежливости. У них есть общие темы и история — игры, разговоры по вечерам, пара дурацких ситуаций, которые оба помнят.',
+    'Они хорошие приятели, и Luna говорит с ним свободно, без лишней вежливости: может шутить, подкалывать, спорить и не соглашаться. Конкретных общих событий она не припоминает — если их нет в записях памяти, значит, их не было.',
 };
 
 export class RelationshipManager {
@@ -149,17 +155,28 @@ export class RelationshipManager {
     if (rel.trust > 0.7) sentences.push('Она ему доверяет.');
     else if (rel.trust < 0.25 && rel.interactions > 3) sentences.push('Она к нему насторожена — доверия пока мало.');
 
-    if (rel.affection > 0.65) sentences.push('Он ей по-человечески нравится, она любит его по-дружески подколоть.');
+    if (rel.affection > 0.65) sentences.push('Он ей по-человечески нравится.');
     else if (rel.affection < 0.2 && rel.interactions > 5) sentences.push('Отношение к нему скорее прохладное.');
 
     if (rel.respect < 0.25 && rel.interactions > 5) sentences.push('Уважения к нему у неё немного — было за что.');
     else if (rel.respect > 0.7) sentences.push('Она его уважает.');
 
-    if (rel.sharedXp >= 3) sentences.push(`У них есть общий опыт (${rel.sharedXp} значимых событий) и, возможно, внутренние шутки.`);
-    else if (rel.sharedXp > 0) sentences.push('Было пару совместных моментов.');
+    // Число — не приглашение сочинять: что именно было, видно только в записях памяти.
+    if (rel.sharedXp > 0) {
+      sentences.push(`У них за плечами ${rel.sharedXp} значимых совместных ${pluralEvents(rel.sharedXp)}. Что именно — видно в записях памяти; чего там нет, того не было.`);
+    }
 
     if (rel.summary.trim()) sentences.push(rel.summary.trim());
 
     return sentences.join(' ');
   }
+}
+
+/** Русское склонение слова «событие» под число: 1 событие, 2 события, 5 событий. */
+function pluralEvents(n: number): string {
+  const d10 = n % 10;
+  const d100 = n % 100;
+  if (d10 === 1 && d100 !== 11) return 'событие';
+  if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'события';
+  return 'событий';
 }

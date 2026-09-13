@@ -113,7 +113,7 @@ export class OpenAICompatibleLLM implements LLMProvider {
     return {
       model: opts.model ?? this.opts.model,
       messages: toWireMessages(messages),
-      temperature: opts.temperature ?? this.opts.temperature ?? 0.9,
+      temperature: opts.temperature ?? this.opts.temperature ?? 0.8,
       max_tokens: opts.maxTokens ?? this.opts.maxTokens ?? 700,
       stream,
       ...(opts.stop ? { stop: opts.stop } : {}),

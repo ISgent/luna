@@ -93,4 +93,10 @@ export class RelationshipsRepo {
   remove(personId: string): void {
     this.db.raw.prepare('DELETE FROM relationships WHERE person_id = ?').run(personId);
   }
+
+  /** Полный сброс отношений со всеми людьми. Число удалённых записей. */
+  deleteAll(): number {
+    const res = this.db.raw.prepare('DELETE FROM relationships').run();
+    return Number(res.changes);
+  }
 }

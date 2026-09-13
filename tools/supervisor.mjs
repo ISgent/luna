@@ -4,7 +4,10 @@
  * Запускается без окна (wscript start-supervisor.vbs) или вручную (node tools/supervisor.mjs).
  * Умеет: старт/стоп/рестарт бота, авто-перезапуск при падении (с защитой от crash-loop),
  * лог в файл + ротация, автозапуск при входе в Windows (папка Startup, без админа),
- * правка основных настроек .env, сборка (npm run build), статус «онлайн» по логу бота.
+ * правка основных настроек .env, сборка (npm run build), сброс памяти Luna к заводскому
+ * (POST /api/reset-memory, только со словом-подтверждением), статус «онлайн» по логу бота,
+ * страница «Люди и память» (/people → POST /api/people: кого Luna знает, её отношения
+ * и записи памяти — можно точечно править, добавлять и удалять).
  *
  * Панель: http://127.0.0.1:8787 (только localhost — наружу не слушает).
  *
@@ -14,6 +17,8 @@
  *   LUNA_ENV_FILE    — путь к .env (default <root>/.env)
  *   LUNA_STARTUP_DIR — папка автозапуска (default Startup из APPDATA)
  *   LUNA_BOT_CMD / LUNA_BOT_ARGS(JSON) — чем запускать бота (default node dist/index.js)
+ *   LUNA_RESET_CMD / LUNA_RESET_ARGS(JSON) — чем сбрасывать память (default node dist/luna/factory-reset.js)
+ *   LUNA_PEOPLE_CMD / LUNA_PEOPLE_ARGS(JSON) — чем править знания о людях (default node dist/luna/people-tool.js)
  * Флаг --auto: сразу стартовать бота, если в panel.json включён autostartBot.
  */
 import http from 'node:http';
@@ -37,6 +42,42 @@ const STARTUP_FILE = path.join(STARTUP_DIR, 'Luna-supervisor.vbs');
 const BOT_CMD = process.env.LUNA_BOT_CMD || process.execPath;
 const BOT_ARGS = process.env.LUNA_BOT_ARGS ? JSON.parse(process.env.LUNA_BOT_ARGS) : [path.join('dist', 'index.js')];
 const DIST_ENTRY = path.join(ROOT, 'dist', 'index.js');
+// Сброс памяти к заводскому: отдельный скомпилированный вход (тот же код, что и у бота).
+// LUNA_RESET_CMD/LUNA_RESET_ARGS — для тестов (переопределяют путь к скрипту).
+const RESET_CMD = process.env.LUNA_RESET_CMD || process.execPath;
+const RESET_ARGS = process.env.LUNA_RESET_ARGS
+  ? JSON.parse(process.env.LUNA_RESET_ARGS)
+  : [path.join('dist', 'luna', 'factory-reset.js')];
+const RESET_OVERRIDDEN = !!(process.env.LUNA_RESET_CMD || process.env.LUNA_RESET_ARGS);
+const RESET_ENTRY = path.join(ROOT, 'dist', 'luna', 'factory-reset.js');
+/** Подтверждение, которое обязана прислать панель (защита от случайного запроса). */
+const RESET_CONFIRM_WORD = 'RESET';
+const RESET_MARKER = 'FACTORY_RESET_RESULT=';
+// Страница «Люди и память»: знания о людях правит тот же код, что и бот, — отдельный
+// скомпилированный вход (как у сброса памяти). Список действий — белый: панель не может
+// попросить инструмент сделать что-то ещё.
+const PEOPLE_CMD = process.env.LUNA_PEOPLE_CMD || process.execPath;
+const PEOPLE_ARGS = process.env.LUNA_PEOPLE_ARGS
+  ? JSON.parse(process.env.LUNA_PEOPLE_ARGS)
+  : [path.join('dist', 'luna', 'people-tool.js')];
+const PEOPLE_OVERRIDDEN = !!(process.env.LUNA_PEOPLE_CMD || process.env.LUNA_PEOPLE_ARGS);
+const PEOPLE_ENTRY = path.join(ROOT, 'dist', 'luna', 'people-tool.js');
+const PEOPLE_MARKER = 'PEOPLE_TOOL_RESULT=';
+const PEOPLE_TIMEOUT_MS = 30_000;
+const PEOPLE_ACTIONS = [
+  'list',
+  'get',
+  'createPerson',
+  'updatePerson',
+  'deletePerson',
+  'wipePerson',
+  'setSetting',
+  'addMemory',
+  'updateMemory',
+  'deleteMemory',
+];
+/** Действия, которые что-то меняют, — пишутся в лог панели. */
+const PEOPLE_MUTATIONS = new Set(PEOPLE_ACTIONS.filter((a) => a !== 'list' && a !== 'get'));
 const PORT = Number(process.env.LUNA_PANEL_PORT || 8787);
 const AUTO_FLAG = process.argv.includes('--auto');
 const RING_LIMIT = 500;
@@ -193,6 +234,122 @@ async function runBuild() {
   });
 }
 
+// ---------- сброс памяти к заводскому ----------
+
+/**
+ * Останавливает бота, сбрасывает память отдельным процессом и запускает бота обратно.
+ * Именно в таком порядке: у работающего бота кэш эмоций и short-term диалога в памяти
+ * процесса, а одновременная запись в SQLite могла бы вернуть часть данных обратно.
+ */
+async function runFactoryReset() {
+  const wasRunning = !!state.child;
+  if (wasRunning) {
+    appendLog('[supervisor] сброс памяти: останавливаю бота…');
+    await stopBot();
+  }
+
+  const out = await new Promise((resolve) => {
+    const p = spawn(RESET_CMD, RESET_ARGS, { cwd: ROOT, windowsHide: true, env: { ...process.env } });
+    let buf = '';
+    const onData = (b) => {
+      buf += String(b);
+    };
+    p.stdout?.on('data', onData);
+    p.stderr?.on('data', onData);
+    const timer = setTimeout(() => {
+      try {
+        p.kill('SIGKILL');
+      } catch {
+        // уже завершился
+      }
+    }, 30_000);
+    p.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve({ code, buf });
+    });
+    p.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ code: -1, buf: String(e) });
+    });
+  });
+
+  const line = out.buf.split(/\r?\n/).find((l) => l.includes(RESET_MARKER));
+  let result = null;
+  if (line) {
+    try {
+      result = JSON.parse(line.slice(line.indexOf(RESET_MARKER) + RESET_MARKER.length));
+    } catch {
+      result = null;
+    }
+  }
+
+  appendLog(
+    result
+      ? `[supervisor] сброс памяти выполнен (БД: ${result.dbPath ?? '?'}): памятей ${result.memories ?? 0}, summary ${result.summaries ?? 0}, отношений ${result.relationships ?? 0}`
+      : `[supervisor] сброс памяти НЕ выполнен (code ${out.code}): ${out.buf.slice(-200)}`,
+  );
+
+  if (wasRunning) startBot();
+
+  if (result?.ok) return { ok: true, ...result, restarted: wasRunning };
+  return {
+    ok: false,
+    error: result?.error ?? `скрипт сброса завершился с кодом ${out.code}`,
+    restarted: wasRunning,
+  };
+}
+
+// ---------- люди и память (страница /people) ----------
+
+/**
+ * Одно действие страницы «Люди и память»: короткий процесс dist/luna/people-tool.js.
+ * Аргументы уходят JSON-ом в stdin, ответ — строкой-маркером в stdout (тот же приём,
+ * что у сброса памяти: предупреждения Node в результат не попадают).
+ * Бота останавливать не нужно — отношения и долговременная память читаются из БД на каждое
+ * сообщение, так что правка подхватывается сразу.
+ */
+function runPeopleTool(action, payload) {
+  return new Promise((resolve) => {
+    const p = spawn(PEOPLE_CMD, [...PEOPLE_ARGS, `--action=${action}`], {
+      cwd: ROOT,
+      windowsHide: true,
+      env: { ...process.env },
+    });
+    let buf = '';
+    const onData = (b) => {
+      buf += String(b);
+    };
+    p.stdout?.on('data', onData);
+    p.stderr?.on('data', onData);
+    const timer = setTimeout(() => {
+      try {
+        p.kill('SIGKILL');
+      } catch {
+        // уже завершился
+      }
+    }, PEOPLE_TIMEOUT_MS);
+    p.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: String(e) });
+    });
+    p.on('exit', (code) => {
+      clearTimeout(timer);
+      const line = buf.split(/\r?\n/).find((l) => l.includes(PEOPLE_MARKER));
+      if (!line) {
+        resolve({ ok: false, error: `инструмент не ответил (code ${code}): ${buf.trim().slice(-200) || 'пусто'}` });
+        return;
+      }
+      try {
+        resolve(JSON.parse(line.slice(line.indexOf(PEOPLE_MARKER) + PEOPLE_MARKER.length)));
+      } catch {
+        resolve({ ok: false, error: 'ответ инструмента не разобрать' });
+      }
+    });
+    p.stdin?.on('error', () => {}); // EPIPE, если процесс умер до записи
+    p.stdin?.end(JSON.stringify(payload ?? {}));
+  });
+}
+
 // ---------- автозапуск (Startup folder) ----------
 
 function autostartEnabled() {
@@ -208,7 +365,9 @@ function setAutostart(enabled) {
       `sh.Run "node ""${path.join(ROOT, 'tools', 'supervisor.mjs')}"" --auto", 0, False`,
       '',
     ].join('\r\n');
-    writeFileSync(STARTUP_FILE, vbs);
+    // WSH без BOM читает .vbs как ANSI: кириллица в пути («ДС бот») превратилась бы в кашу,
+    // и автозапуск молча не стартовал бы. UTF-16 LE с BOM WSH понимает как есть.
+    writeFileSync(STARTUP_FILE, '\uFEFF' + vbs, 'utf16le');
     appendLog('[supervisor] автозапуск включён (Startup/Luna-supervisor.vbs)');
   } else if (existsSync(STARTUP_FILE)) {
     rmSync(STARTUP_FILE, { force: true });
@@ -281,6 +440,8 @@ function statusPayload() {
       restarts: state.restarts,
     },
     distReady: distReady(),
+    /** Есть ли чем править знания о людях (страница /people). */
+    peopleReady: PEOPLE_OVERRIDDEN || existsSync(PEOPLE_ENTRY),
     autostart: { enabled: autostartEnabled(), autostartBot: cfg.autostartBot, autoRestart: cfg.autoRestart },
     envFile: ENV_FILE,
     logFile: LOG_FILE,
@@ -292,8 +453,9 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://127.0.0.1`);
     const route = `${req.method} ${url.pathname}`;
 
-    if (route === 'GET /') {
-      const html = readFileSync(path.join(ROOT, 'tools', 'panel.html'));
+    if (route === 'GET /' || route === 'GET /people') {
+      const file = route === 'GET /people' ? 'people.html' : 'panel.html';
+      const html = readFileSync(path.join(ROOT, 'tools', file));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
       return;
@@ -312,6 +474,34 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, startBot());
     }
     if (route === 'POST /api/build') return json(res, 200, await runBuild());
+    if (route === 'POST /api/reset-memory') {
+      const b = await readBody(req);
+      // двойная защита от случайного нажатия: подтверждение в панели + слово в теле запроса
+      if (b.confirm !== RESET_CONFIRM_WORD) {
+        return json(res, 400, { error: `нужно подтверждение: {"confirm":"${RESET_CONFIRM_WORD}"}` });
+      }
+      if (!RESET_OVERRIDDEN && !existsSync(RESET_ENTRY)) {
+        return json(res, 409, { error: 'нет сборки — сначала нажмите «Собрать»' });
+      }
+      return json(res, 200, await runFactoryReset());
+    }
+    if (route === 'POST /api/people') {
+      const b = await readBody(req);
+      const action = typeof b.action === 'string' ? b.action : '';
+      if (!PEOPLE_ACTIONS.includes(action)) {
+        return json(res, 400, { ok: false, error: `неизвестное действие: ${action || '(нет)'}` });
+      }
+      if (!PEOPLE_OVERRIDDEN && !existsSync(PEOPLE_ENTRY)) {
+        return json(res, 409, { ok: false, error: 'нет сборки — сначала нажмите «Собрать» в панели' });
+      }
+      const payload = b.payload && typeof b.payload === 'object' ? b.payload : {};
+      const r = await runPeopleTool(action, payload);
+      if (PEOPLE_MUTATIONS.has(action)) {
+        const who = payload.personId === null ? 'общие записи' : (payload.personId ?? payload.memoryId ?? '?');
+        appendLog(`[supervisor] люди: ${action} ${who} → ${r.ok ? 'ok' : `ошибка: ${r.error}`}`);
+      }
+      return json(res, r.ok ? 200 : 400, r);
+    }
     if (route === 'GET /api/autostart') {
       const cfg = panelConfig();
       return json(res, 200, { enabled: autostartEnabled(), autostartBot: cfg.autostartBot, autoRestart: cfg.autoRestart });

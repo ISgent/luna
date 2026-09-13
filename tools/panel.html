@@ -51,6 +51,14 @@
   button:disabled { opacity: .38; cursor: not-allowed; }
   button.primary { background: rgba(181,140,255,.16); border-color: rgba(181,140,255,.5); color: var(--accent); font-weight: 600; }
   button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  button.danger.solid { background: rgba(255,107,129,.16); border-color: rgba(255,107,129,.55); color: var(--red); font-weight: 600; }
+  .confirm-box {
+    margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid rgba(255,107,129,.55); background: rgba(255,107,129,.08);
+  }
+  .confirm-box .q { font-size: 14px; font-weight: 600; color: var(--red); margin-bottom: 4px; }
+  .confirm-box .d { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
+  [hidden] { display: none !important; }
   label.chk { display: flex; align-items: center; gap: 9px; padding: 7px 0; cursor: pointer; font-size: 14px; }
   label.chk input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
   .hint { color: var(--muted); font-size: 12px; margin: 2px 0 0 26px; }
@@ -76,6 +84,12 @@
   }
   .toast.show { opacity: 1; }
   .paths { color: var(--muted); font-size: 12px; line-height: 1.8; word-break: break-all; }
+  a.navlink {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    background: rgba(181,140,255,.16); border: 1px solid rgba(181,140,255,.5); color: var(--accent);
+    padding: 9px 18px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  }
+  a.navlink:hover { background: rgba(181,140,255,.26); }
 </style>
 </head>
 <body>
@@ -95,6 +109,18 @@
       <button id="btnRestart">🔄 Перезапустить</button>
       <button id="btnBuild" title="npm run build">🔨 Собрать</button>
       <button id="btnShutdown" class="danger" title="Остановить бота и закрыть смотрителя">✖ Закрыть всё</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Люди и память</h2>
+    <div class="meta" style="margin-bottom:12px">
+      Кого Luna знает, какие у неё отношения с каждым человеком и что именно она о нём помнит.
+      Там же можно точечно поправить отношения, добавить или стереть отдельные записи памяти,
+      добавить человека и удалить его целиком.
+    </div>
+    <div class="btns" style="margin-top:0">
+      <a class="navlink" href="/people">👥 Открыть страницу «Люди и память» →</a>
     </div>
   </div>
 
@@ -134,6 +160,26 @@
     <div class="btns">
       <button id="btnSave" class="primary">💾 Сохранить и применить</button>
       <span class="meta" style="align-self:center">применение перезапустит бота, если он запущен</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Сброс памяти</h2>
+    <div class="meta" style="margin-bottom:12px">
+      Возвращает Luna к заводскому состоянию: стирает долговременную память, краткие содержания
+      каналов, отношения со всеми людьми и текущее настроение. Владелец снова «старый знакомый».
+      Пользователи, настройки озвучки и статистика остаются. Бот будет остановлен и запущен заново.
+    </div>
+    <div class="btns">
+      <button id="btnResetAsk" class="danger">🧹 Сбросить память до заводской</button>
+    </div>
+    <div id="resetConfirm" class="confirm-box" hidden>
+      <div class="q">Стереть всё, что Luna помнит?</div>
+      <div class="d">Отменить будет нельзя. Бот перезапустится — это несколько секунд.</div>
+      <div class="btns" style="margin-top:0">
+        <button id="btnResetYes" class="danger solid">Да, стереть всё</button>
+        <button id="btnResetNo">Отмена</button>
+      </div>
     </div>
   </div>
 
@@ -246,6 +292,32 @@ $('btnShutdown').onclick = async () => {
   await post('/api/shutdown').catch(() => {});
   $('pill').textContent = '⚪ смотритель закрыт';
   toast('всё закрыто');
+};
+
+// Сброс памяти: два шага — сначала показываем подтверждение, стирает только вторая кнопка.
+// Блок подтверждения не исчезает сам: ждёт явного «Да» или «Отмена».
+function hideResetConfirm() {
+  $('resetConfirm').hidden = true;
+  $('btnResetAsk').disabled = false;
+}
+$('btnResetAsk').onclick = () => {
+  $('resetConfirm').hidden = false;
+  $('btnResetAsk').disabled = true;
+};
+$('btnResetNo').onclick = hideResetConfirm;
+$('btnResetYes').onclick = async () => {
+  $('btnResetYes').disabled = true;
+  $('btnResetNo').disabled = true;
+  toast('сбрасываю память, бот перезапустится…');
+  try {
+    const r = await post('/api/reset-memory', { confirm: 'RESET' });
+    if (!r.ok) throw new Error(r.error || 'сброс не выполнился');
+    toast(`сброшено (${r.dbPath}): памятей ${r.memories}, summary ${r.summaries}, отношений ${r.relationships}`);
+  } catch (e) { toast('не вышло: ' + e.message); }
+  $('btnResetYes').disabled = false;
+  $('btnResetNo').disabled = false;
+  hideResetConfirm();
+  refreshStatus(); refreshLog();
 };
 
 for (const [id, key] of [['chkAutostart','enabled'], ['chkAutostartBot','autostartBot'], ['chkAutoRestart','autoRestart']]) {

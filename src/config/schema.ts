@@ -61,7 +61,7 @@ export const envSchema = z.object({
   LLM_BASE_URL: str('https://dashscope.aliyuncs.com/compatible-mode/v1'),
   LLM_MODEL: str('qwen-flash'),
   LLM_BACKGROUND_MODEL: str('qwen-plus'),
-  LLM_TEMPERATURE: num(0.9),
+  LLM_TEMPERATURE: num(0.8),
   LLM_MAX_TOKENS: num(700),
   LLM_TIMEOUT_MS: num(20000),
   LLM_MAX_RETRIES: num(2),

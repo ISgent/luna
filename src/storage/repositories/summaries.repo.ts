@@ -48,6 +48,12 @@ export class SummariesRepo {
       .get(channelId) as { c: number };
     return row.c;
   }
+
+  /** Полный сброс: удаляет краткие содержания всех каналов. Число удалённых. */
+  deleteAll(): number {
+    const res = this.db.raw.prepare('DELETE FROM conversation_summaries').run();
+    return Number(res.changes);
+  }
 }
 
 interface EmotionRow {

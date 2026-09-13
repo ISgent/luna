@@ -9,6 +9,7 @@ import {
 import { MemoryManager } from '../../src/luna/memory/memory-manager.js';
 import { MemoryRetrieval } from '../../src/luna/memory/retrieval.js';
 import { MemoryConsolidator } from '../../src/luna/memory/consolidator.js';
+import { factoryReset } from '../../src/luna/factory-reset.js';
 import { MockEmbeddingProvider, MockLLMProvider } from '../../src/ai/mock.js';
 import { EMOTION_BASELINE } from '../../src/luna/types.js';
 
@@ -107,6 +108,22 @@ describe('RelationshipManager', () => {
     });
     const rel = rm.ensure({ id: 'owner1' });
     expect(rel.interactions).toBe(0);
+  });
+
+  it('число совместных событий в описании склоняется по-русски', () => {
+    const rm = mk();
+    const rel = rm.ensure({ id: 'p1' });
+    const word = (n: number) => {
+      rel.sharedXp = n;
+      return rm.describeForPrompt(rel).match(/за плечами \d+ значимых совместных (\S+)\./)?.[1];
+    };
+    expect(word(1)).toBe('событие');
+    expect(word(2)).toBe('события');
+    expect(word(4)).toBe('события');
+    expect(word(5)).toBe('событий');
+    expect(word(11)).toBe('событий');
+    expect(word(21)).toBe('событие');
+    expect(word(22)).toBe('события');
   });
 
   it('дельты плавные: логистика + лимит за событие', () => {
@@ -348,5 +365,75 @@ describe('MemoryConsolidator', () => {
     const res = await c.runForPerson('p1');
     expect(res.clustersMerged).toBe(0);
     expect(repos.memories.countActive('p1')).toBe(6);
+  });
+});
+
+describe('factoryReset — сброс памяти к заводскому (кнопка в панели)', () => {
+  const seed = async () => {
+    const mm = new MemoryManager(repos.memories, new MockEmbeddingProvider(128), { enabled: true, dedupeSimilarity: 0.99 });
+    await mm.store({ kind: 'preference', content: 'Gent любит Сталкер', personId: 'p1', importance: 0.6 });
+    await mm.store({ kind: 'event', content: 'Вася починил сервер', personId: 'p2', importance: 0.8 });
+    repos.summaries.insert({ channelId: 'ch1', periodStart: 1, periodEnd: 2, summary: 'говорили про игры' });
+    const rm = new RelationshipManager(repos.users, repos.relationships, { ownerId: 'owner1' });
+    rm.ensureAndCount({ id: 'p1', displayName: 'Gent' });
+    rm.applyDeltas('p1', { trust: 0.1, summary: 'Они уже неплохо общаются.' });
+    new EmotionManager(repos.emotions, { decayHalfLifeMin: 90 }).applyDeltas({ mood: 0.2, irritation: 0.2 });
+    repos.settings.set('user:p1', 'tts_enabled', 'false');
+    repos.stats.incrementMessagesIn('p1');
+  };
+
+  it('стирает памяти, summary и отношения, эмоции возвращает на базовую линию', async () => {
+    await seed();
+    const result = factoryReset(repos, { ownerId: 'owner1' });
+
+    expect(result.memories).toBe(2);
+    expect(result.summaries).toBe(1);
+    expect(result.relationships).toBe(1);
+    expect(result.emotions).toBe('baseline');
+    expect(repos.memories.countActive()).toBe(0);
+    expect(repos.summaries.countForChannel('ch1')).toBe(0);
+    const state = new EmotionManager(repos.emotions, { decayHalfLifeMin: 90 }).current();
+    expect(state.mood).toBeCloseTo(EMOTION_BASELINE.mood);
+    expect(state.irritation).toBe(EMOTION_BASELINE.irritation);
+  });
+
+  it('обычные люди — знакомитесь заново, владелец снова «старый знакомый»', async () => {
+    await seed();
+    const result = factoryReset(repos, { ownerId: 'owner1' });
+
+    expect(result.ownerSeeded).toBe(true);
+    expect(repos.relationships.get('p1')).toBeNull();
+    const owner = repos.relationships.get('owner1')!;
+    expect(owner).not.toBeNull();
+    expect(owner.familiarity).toBeCloseTo(OWNER_SEED.familiarity);
+    expect(owner.trust).toBeCloseTo(OWNER_SEED.trust);
+    expect(owner.summary).toBe(OWNER_SEED.summary);
+    expect(owner.interactions).toBe(OWNER_SEED.interactions);
+    // пользователь как запись остаётся — это не память
+    expect(repos.users.get('p1')).not.toBeNull();
+  });
+
+  it('настройки озвучки и статистика не трогаются', async () => {
+    await seed();
+    factoryReset(repos, { ownerId: 'owner1' });
+    expect(repos.settings.get('user:p1', 'tts_enabled')).toBe('false');
+    expect(repos.stats.totals('p1').messagesIn).toBe(1);
+  });
+
+  it('без ownerId никто не пересеивается', async () => {
+    await seed();
+    const result = factoryReset(repos);
+    expect(result.ownerSeeded).toBe(false);
+    expect(repos.relationships.all()).toHaveLength(0);
+  });
+
+  it('полнотекстовый индекс после сброса не врёт (FTS чистится триггером)', async () => {
+    repos.memories.insert({ kind: 'fact', personId: 'p1', content: 'редкое слово флексоморф', importance: 0.5 });
+    expect(repos.memories.keywordSearch('флексоморф')).toHaveLength(1);
+    factoryReset(repos);
+    expect(repos.memories.keywordSearch('флексоморф')).toHaveLength(0);
+    // и новая запись после сброса ищется нормально
+    repos.memories.insert({ kind: 'fact', personId: 'p2', content: 'снова флексоморф', importance: 0.5 });
+    expect(repos.memories.keywordSearch('флексоморф')).toHaveLength(1);
   });
 });
